@@ -1,0 +1,7 @@
+.sconf_temp
+.sconsign.dblite
+.vscode/
+build/release/
+dist/
+scene/
+data/scons/detect_python.pyc
