@@ -417,9 +417,9 @@ public:
     virtual Spectrum eval(const BSDFSamplingRecord &bRec,
         EMeasure measure = ESolidAngle) const = 0;
 
-	// add by GY
-	virtual Spectrum eval(const BSDFSamplingRecord &bRec, Float &pdf,
-		EMeasure measure = ESolidAngle) const;
+	// // add by GY
+	// virtual Spectrum eval(const BSDFSamplingRecord &bRec, Float &pdf,
+	// 	EMeasure measure = ESolidAngle) const;
 
 	// add by GY
 	virtual void evalAndSample(BSDFSamplingRecord &bRec, Spectrum &evalVal, Float &evalPdf, Spectrum &sampleVal, Float &samplePdf, 

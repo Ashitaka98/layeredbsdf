@@ -74,17 +74,18 @@ ref<BSDF> BSDF::clone() {
 		getClass()->getName().c_str());
 	return NULL;
 }
-/// # add by GY
-Spectrum BSDF::eval(const BSDFSamplingRecord &bRec, Float &_pdf, EMeasure measure) const {
-	_pdf = pdf(bRec, measure);
-	return eval(bRec, measure);
-}
+// /// # add by GY
+// Spectrum BSDF::eval(const BSDFSamplingRecord &bRec, Float &_pdf, EMeasure measure) const {
+// 	_pdf = pdf(bRec, measure);
+// 	return eval(bRec, measure);
+// }
 
 /// # add by GY
 void BSDF::evalAndSample(BSDFSamplingRecord &bRec, Spectrum &evalVal, Float &evalPdf, Spectrum &sampleVal, Float &samplePdf,
 	const Point2 &nextSample, EMeasure measure) const {
 	const BSDFSamplingRecord _bRec(bRec);
-	evalVal = eval(_bRec, evalPdf, measure);
+    evalPdf = pdf(_bRec, measure);
+	evalVal = eval(_bRec, measure);
 	sampleVal = sample(bRec, samplePdf, nextSample);
 }
 
