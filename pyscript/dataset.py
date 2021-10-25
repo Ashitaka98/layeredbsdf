@@ -74,10 +74,11 @@ class DatasetGenerator:
                 'maxSurvivalProb': 1.0,
                 'nbLayers': 2,
                 'surface_0': {
-                        'type': 'roughdielectric',
-                        'intIOR': eta_0,
-                        'extIOR': 1.0,
-                        'alpha': alpha_0
+                    'type': 'roughdielectric',
+                    'distribution': 'ggx',
+                    'intIOR': eta_0,
+                    'extIOR': 1.0,
+                    'alpha': alpha_0
                 },
                 'normal_0': Vector3(cos(theta_0)*sin(phi_0), sin(theta_0)*sin(phi_0), cos(phi_0)),
                 'sigmaT_0': Spectrum(sigma_t),
@@ -88,6 +89,7 @@ class DatasetGenerator:
                 },
                 'surface_1': {
                     'type': 'roughdielectric',
+                    'distribution': 'ggx',
                     'intIOR': eta_0*eta_1,
                     'extIOR': eta_0,
                     'alpha': alpha_1
@@ -145,4 +147,4 @@ if __name__ == '__main__':
     generator = DatasetGenerator(
         '/home/lzr/layeredBsdfData/dielectric', 300, 25, 25, 128, DatasetGenerator.dielectric)
     generator.run()
-    Log('time: '+str(time()-task_start)+'s')
+    Log('total time: '+str(time()-task_start)+'s')
