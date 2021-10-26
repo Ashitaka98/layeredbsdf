@@ -11,12 +11,13 @@ class DatasetGenerator:
     # phi_sample_rate:  number of samples to sample phi
     # times_per_sample: samples used to denoise(repeat times per sampling)
     # type: dielectric or conductor
-    def __init__(self, output_dir, bsdf_number, theta_sample_rate, phi_sample_rate, times_per_sample, type):
+    def __init__(self, output_dir, bsdf_number, theta_sample_rate, phi_sample_rate, times_per_sample, type, debug=False):
         self.output_dir = output_dir
         self.bsdf_number = bsdf_number
         self.theta_sample_rate = theta_sample_rate
         self.phi_sample_rate = phi_sample_rate
         self.times_per_sample = times_per_sample
+        self.debug = debug
 
         self.pmgr = PluginManager.getInstance()
 
@@ -122,15 +123,25 @@ class DatasetGenerator:
                     bRec.wi = wi
                     bRec.wo = wo
                     accum = Spectrum(0)
+                    nan_count = 0
                     for i in range(self.times_per_sample):
-                        accum += layered.eval(bRec, EMeasure.ESolidAngle)
+                        ret = layered.eval(bRec, EMeasure.ESolidAngle)
+                        if np.isnan(ret[0]) or np.isnan(ret[1]) or np.isnan(ret[2]):
+                            nan_count += 1
+                        else:
+                            accum += ret
                     if wo_z != 0:
                         accum /= abs(wo_z)
-                    accum /= self.times_per_sample
+                    if self.debug and nan_count != 0:
+                        Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '.format(
+                            theta_i, phi_i, theta_o, phi_o, nan_count))
+                    if nan_count == self.times_per_sample:
+                        raise Exception('all \'eval\' calls return NaN ')
+                    accum /= self.times_per_sample - nan_count
                     table.append([theta_i, phi_i, theta_o, phi_o,
                                  accum[0], accum[1], accum[2]])
 
-            nptable = np.array(table)
+            nptable = np.array(table).astype(np.float32)
             np.save(join(self.output_dir, filename), nptable)
             Log('time:'+str(time()-start)+'s')
 
