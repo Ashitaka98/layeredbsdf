@@ -5,3 +5,5 @@ build/release/
 dist/
 scene/
 data/scons/detect_python.pyc
+pyscript/*.pyc
+pyscript/__pycache__
