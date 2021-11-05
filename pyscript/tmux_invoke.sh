@@ -2,4 +2,4 @@
 source ~/.bashrc
 conda activate layeredBsdf
 source /home/lzr/Projects/layeredbsdf/setpath.sh
-python /home/lzr/Projects/layeredbsdf/pyscript/dataset.py
+python /home/lzr/Projects/layeredbsdf/pyscript/without_normal.py

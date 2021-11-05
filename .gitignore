@@ -7,3 +7,5 @@ scene/
 data/scons/detect_python.pyc
 pyscript/*.pyc
 pyscript/__pycache__
+config.log
+mitsuba.*.log
