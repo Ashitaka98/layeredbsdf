@@ -1,3 +1,8 @@
+from math import cos, sin
+import numpy as np
+from time import time
+
+
 class DatasetGenerator:
 
     dielectric = 0
@@ -54,26 +59,29 @@ class DatasetGenerator:
         from time import time
         from random import uniform, randint
         from os.path import join
-        sigma_t_range = [0.1, 0.5, 1, 3, 5, 10]
+        sigma_t_range = [0, 1, 2, 5]
 
         for i in range(self.bsdf_number):
             start = time()
             Log('####  round ' + str(i) + ' start')
             sigma_t = sigma_t_range[randint(0, len(sigma_t_range) - 1)]
-            albedo = [uniform(0, 1), uniform(0, 1), uniform(0, 1)]
-            g = uniform(-0.99, 0.99)
+            albedo = [
+                1 - uniform(0, 1)**2, 1 - uniform(0, 1)**2,
+                1 - uniform(0, 1)**2
+            ]
+            g = uniform(-0.9, 0.9)
 
-            # roughness 0.001-1
-            alpha_0 = 10**uniform(-3, 0)
-            alpha_1 = 10**uniform(-3, 0)
+            # roughness 0.216^3-1
+            alpha_0 = uniform(0.216, 1)**3
+            alpha_1 = uniform(0.216, 1)**3
 
             # normal semi-sphere
             theta_0 = uniform(0, 2 * pi)
-            phi_0 = uniform(0, 0.5 * pi)
+            phi_0 = uniform(0, 0.4 * pi)
             theta_1 = uniform(0, 2 * pi)
-            phi_1 = uniform(0, 0.5 * pi)
+            phi_1 = uniform(0, 0.4 * pi)
 
-            # ior 1-2
+            # ior 1.05-2
             eta_0 = uniform(1.05, 2)
             eta_1 = uniform(1.05, 2)
 
@@ -233,17 +241,14 @@ class DatasetGenerator:
 
 
 if __name__ == '__main__':
-    from math import cos, sin
-    import numpy as np
-    from time import time
     from utils import Log
     from mitsuba.core import PluginManager, Properties, Vector3, Spectrum
     from mitsuba.render import Intersection, BSDFSamplingRecord, ETransportMode, EMeasure
     Log('task begin')
     task_start = time()
-    generator = DatasetGenerator('/home/lzr/layeredBsdfData/dielectric_train',
-                                 '/home/lzr/layeredBsdfData/dielectric_test',
-                                 300, 25, 25, 128, DatasetGenerator.dielectric,
-                                 True)
+    generator = DatasetGenerator(
+        '/home/lzr/layeredBsdfData/dielectric_train_new_distribution',
+        '/home/lzr/layeredBsdfData/dielectric_test_new_distribution', 300, 25,
+        25, 128, DatasetGenerator.dielectric, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
