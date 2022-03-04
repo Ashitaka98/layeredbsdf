@@ -100,8 +100,10 @@ class DatasetGenerator:
             #eta_1 = uniform(1.05, 2)
 
 
-            ### TODO: get a random pair of eta-k from the table!
+            # get a random pair of eta-k from the table!
             eta_1, k_1 = self.eta_k_table[ran.randint(0, len(self.eta_k_table)-1)]
+
+            Log('[eta-k] Selected ' + str(eta_1) + '+' + str(k_1) + 'i')
 
 
             layered = self.pmgr.create({
@@ -271,7 +273,7 @@ if __name__ == '__main__':
         '/home/lzr/layeredBsdfData/conductor_test', 300, 25,
         25, 128, DatasetGenerator.conductor, True)
 
-    generator.readTable('./eta-k_table.txt')
-    Log('Read ' + str(len(generator.eta_k_table)) + ' eta-k pairs')
+    generator.readTable('/home/lzr/Projects/layeredbsdf/pyscript/eta-k_table.txt')
+    Log('[eta-k] Read ' + str(len(generator.eta_k_table)) + ' eta-k pairs')
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
