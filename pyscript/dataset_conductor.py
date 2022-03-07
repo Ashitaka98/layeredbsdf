@@ -65,7 +65,7 @@ class DatasetGenerator:
                 line = f.readline()
                 if not line:
                     break
-                self.eta_k_table.append(map(float, line.split()))
+                self.eta_k_table.append(list(map(float, line.split())))
 
 
     def run(self):
@@ -101,7 +101,9 @@ class DatasetGenerator:
 
 
             # get a random pair of eta-k from the table!
-            eta_1, k_1 = self.eta_k_table[ran.randint(0, len(self.eta_k_table)-1)]
+            ranidx = ran.randint(0, len(self.eta_k_table)-1)
+            Log('[eta-k] Random index: ' + str(ranidx))
+            eta_1, k_1 = self.eta_k_table[ranidx]
 
             Log('[eta-k] Selected ' + str(eta_1) + '+' + str(k_1) + 'i')
 
