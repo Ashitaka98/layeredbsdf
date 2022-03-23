@@ -122,11 +122,11 @@ class Render_Loss:
 
                     wo = np.matmul(shading_frame_inv, -ray_direction)
                     phi_o = np.arccos(wo[2])
-                    if wi[2] > 0:
-                        precomputed.append(
-                            np.array([L * np.cos(phi_o)]))
-                    else:
-                        precomputed.append(np.array([0]))
+                    #if wi[2] > 0:
+                    precomputed.append(
+                        np.array([L * np.abs(np.cos(phi_o))]))
+                    #else:
+                    #    precomputed.append(np.array([0]))
 
         self.precomputed = precomputed
 
@@ -217,4 +217,4 @@ if __name__ == "__main__":
     render_loss.add_illuminant(Renderer.ILLUMINANT_TYPE.point_light, 
                                 intensity=10,
                                 light_position=[0, 0, 3])
-    render_loss.gen_data('/home/lzr/layeredBsdfData/dielectric_test_new_distribution/', '/home/lzr/layeredBsdfData/dielectric_test_new_distribution_renderloss/')
+    render_loss.gen_data('/home/lzr/layeredBsdfData/renderloss_test2/', '/home/lzr/layeredBsdfData/renderloss_test2_out2/')

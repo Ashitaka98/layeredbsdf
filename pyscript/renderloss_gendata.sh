@@ -7,7 +7,7 @@ let file_num=$total_files_num/$core_num+1
 begin_idx=0
 while (($i<=$core_num))
 do
-    echo ???
+    echo $begin_idx $file_num
     tmux new-session -d -s $session_prefix$i "bash --init-file <(echo source ~/.bashrc \&\& \
 conda activate layeredBsdf \&\& \
 source /home/lzr/Projects/layeredbsdf/setpath.sh \&\& \
