@@ -1,3 +1,9 @@
+from math import cos, sin
+import numpy as np
+from time import time
+import os
+
+
 class DatasetGenerator:
 
     dielectric = 0
@@ -54,26 +60,29 @@ class DatasetGenerator:
         from time import time
         from random import uniform, randint
         from os.path import join
-        sigma_t_range = [0.1, 0.5, 1, 3, 5, 10]
+        sigma_t_range = [0, 1, 2, 5]
 
         for i in range(self.bsdf_number):
             start = time()
             Log('####  round ' + str(i) + ' start')
             sigma_t = sigma_t_range[randint(0, len(sigma_t_range) - 1)]
-            albedo = [uniform(0, 1), uniform(0, 1), uniform(0, 1)]
-            g = uniform(-0.99, 0.99)
+            albedo = [
+                1 - uniform(0, 1)**2, 1 - uniform(0, 1)**2,
+                1 - uniform(0, 1)**2
+            ]
+            g = uniform(-0.9, 0.9)
 
-            # roughness 0.001-1
-            alpha_0 = 10**uniform(-3, 0)
-            alpha_1 = 10**uniform(-3, 0)
+            # roughness 0.216^3-1
+            alpha_0 = uniform(0.216, 1)**3
+            alpha_1 = uniform(0.216, 1)**3
 
             # normal semi-sphere
-            theta_0 = 0
-            phi_0 = 0
-            theta_1 = 0
-            phi_1 = 0
+            theta_0 = uniform(0, 2 * pi)
+            phi_0 = uniform(0, 0.4 * pi)
+            theta_1 = uniform(0, 2 * pi)
+            phi_1 = uniform(0, 0.4 * pi)
 
-            # ior 1-2
+            # ior 1.05-2
             eta_0 = uniform(1.05, 2)
             eta_1 = uniform(1.05, 2)
 
@@ -136,13 +145,13 @@ class DatasetGenerator:
             pi = np.math.pi
 
             its = Intersection()
-            table_train = []
+            table_train_brdf = []
+            table_train_btdf = []
             for i1 in range(self.theta_sample_rate):
                 theta_i = (i1 +
                            uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    phi_i = (i2 +
-                             uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
+                    phi_i = (i2 + uniform(0, 1)) * pi / self.phi_sample_rate
                     wi_x = cos(theta_i) * sin(phi_i)
                     wi_y = sin(theta_i) * sin(phi_i)
                     wi_z = cos(phi_i)
@@ -152,8 +161,9 @@ class DatasetGenerator:
                         theta_o = (i3 + uniform(
                             0, 1)) * 2 * pi / self.theta_sample_rate
                         for i4 in range(self.phi_sample_rate):
-                            phi_o = (i4 + uniform(
-                                0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            ##### BRDF #####
+                            phi_o = (i4 +
+                                     uniform(0, 1)) * pi / self.phi_sample_rate
                             wo_x = cos(theta_o) * sin(phi_o)
                             wo_y = sin(theta_o) * sin(phi_o)
                             wo_z = cos(phi_o)
@@ -181,12 +191,49 @@ class DatasetGenerator:
                                 raise Exception(
                                     'all \'eval\' calls return NaN ')
                             accum /= self.times_per_sample - nan_count
-                            table_train.append([
+                            table_train_brdf.append([
                                 theta_i, phi_i, theta_o, phi_o, accum[0],
                                 accum[1], accum[2]
                             ])
 
-            table_test = []
+                            ##### BTDF #####
+                            phi_o = pi * 0.5 + (
+                                    (i4 + uniform(0, 1)) * pi / self.phi_sample_rate)
+                            wo_x = cos(theta_o) * sin(phi_o)
+                            wo_y = sin(theta_o) * sin(phi_o)
+                            wo_z = cos(phi_o)
+                            wo = Vector3(wo_x, wo_y, wo_z)
+                            bRec = BSDFSamplingRecord(its, self.sampler,
+                                                      ETransportMode.ERadiance)
+                            bRec.wi = wi
+                            bRec.wo = wo
+                            accum = Spectrum(0)
+                            nan_count = 0
+                            for i in range(self.times_per_sample):
+                                ret = layered.eval(bRec, EMeasure.ESolidAngle)
+                                if np.isnan(ret[0]) or np.isnan(
+                                        ret[1]) or np.isnan(ret[2]):
+                                    nan_count += 1
+                                else:
+                                    accum += ret
+                            if wo_z != 0:
+                                accum /= abs(wo_z)
+                            if self.debug and nan_count != 0:
+                                Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
+                                    .format(theta_i, phi_i, theta_o, phi_o,
+                                            nan_count))
+                            if nan_count == self.times_per_sample:
+                                raise Exception(
+                                    'all \'eval\' calls return NaN ')
+                            accum /= self.times_per_sample - nan_count
+                            table_train_btdf.append([
+                                theta_i, phi_i, theta_o, phi_o, accum[0],
+                                accum[1], accum[2]
+                            ])
+
+
+            table_test_brdf = []
+            table_test_btdf = []
             for omega_i in self.solid_angle:
                 theta_i, phi_i = omega_i
                 wi_x = cos(theta_i) * sin(phi_i)
@@ -195,6 +242,7 @@ class DatasetGenerator:
                 wi = Vector3(wi_x, wi_y, wi_z)
                 its.wi = wi
                 for omega_o in self.solid_angle:
+                    ##### BRDF #####
                     theta_o, phi_o = omega_o
                     wo_x = cos(theta_o) * sin(phi_o)
                     wo_y = sin(theta_o) * sin(phi_o)
@@ -221,30 +269,75 @@ class DatasetGenerator:
                     if nan_count == self.times_per_sample:
                         raise Exception('all \'eval\' calls return NaN ')
                     accum /= self.times_per_sample - nan_count
-                    table_test.append([
+                    table_test_brdf.append([
                         theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
                         accum[2]
                     ])
-            nptable_train = np.array(table_train).astype(np.float32)
-            nptable_test = np.array(table_test).astype(np.float32)
 
-            np.save(join(self.train_output_dir, filename), nptable_train)
-            np.save(join(self.test_output_dir, filename), nptable_test)
+                    ##### BTDF #####
+                    theta_o, phi_o = omega_o
+                    phi_o += pi * 0.5
+                    wo_x = cos(theta_o) * sin(phi_o)
+                    wo_y = sin(theta_o) * sin(phi_o)
+                    wo_z = cos(phi_o)
+                    wo = Vector3(wo_x, wo_y, wo_z)
+                    bRec = BSDFSamplingRecord(its, self.sampler,
+                                              ETransportMode.ERadiance)
+                    bRec.wi = wi
+                    bRec.wo = wo
+                    accum = Spectrum(0)
+                    nan_count = 0
+                    for i in range(self.times_per_sample):
+                        ret = layered.eval(bRec, EMeasure.ESolidAngle)
+                        if np.isnan(ret[0]) or np.isnan(ret[1]) or np.isnan(
+                                ret[2]):
+                            nan_count += 1
+                        else:
+                            accum += ret
+                    if wo_z != 0:
+                        accum /= abs(wo_z)
+                    if self.debug and nan_count != 0:
+                        Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
+                            .format(theta_i, phi_i, theta_o, phi_o, nan_count))
+                    if nan_count == self.times_per_sample:
+                        raise Exception('all \'eval\' calls return NaN ')
+                    accum /= self.times_per_sample - nan_count
+                    table_test_btdf.append([
+                        theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
+                        accum[2]
+                    ])
+
+            nptable_train_brdf = np.array(table_train_brdf).astype(np.float32)
+            nptable_test_brdf = np.array(table_test_brdf).astype(np.float32)
+
+            nptable_train_btdf = np.array(table_train_btdf).astype(np.float32)
+            nptable_test_btdf = np.array(table_test_btdf).astype(np.float32)
+
+            if not os.path.exists(self.train_output_dir + '_brdf'):
+                os.makedirs(self.train_output_dir + '_brdf')
+            
+            if not os.path.exists(self.train_output_dir + '_btdf'):
+                os.makedirs(self.train_output_dir + '_btdf')
+
+            np.save(join(self.train_output_dir + '_brdf', filename), nptable_train_brdf)
+            np.save(join(self.test_output_dir + '_brdf', filename), nptable_test_brdf)
+
+            np.save(join(self.train_output_dir + '_btdf', filename), nptable_train_btdf)
+            np.save(join(self.test_output_dir + '_btdf', filename), nptable_test_btdf)
+
+
             Log('time:' + str(time() - start) + 's')
 
 
 if __name__ == '__main__':
-    from math import cos, sin
-    import numpy as np
-    from time import time
     from utils import Log
     from mitsuba.core import PluginManager, Properties, Vector3, Spectrum
     from mitsuba.render import Intersection, BSDFSamplingRecord, ETransportMode, EMeasure
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/withoutnormal_uphemi_train',
-        '/home/lzr/layeredBsdfData/withoutnormal_uphemi_test', 10, 25, 25, 128,
-        DatasetGenerator.dielectric, True)
+        '/home/lzr/layeredBsdfData/dielectric_train',
+        '/home/lzr/layeredBsdfData/dielectric_test', 300, 25,
+        25, 128, DatasetGenerator.dielectric, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')

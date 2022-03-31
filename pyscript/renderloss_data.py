@@ -152,11 +152,13 @@ class Render_Loss:
                 if x * x + y * y < 1:
                     # Shading. May use a counter to read precomputed
                     #print(len(self.wi_list))
+                    #print('in')
                     f = GY_bsdf.eval(theta_i=self.wi_list[cnt][0],
                                      phi_i=self.wi_list[cnt][1],
                                      theta_o=self.wo[cnt][0],
                                      phi_o=self.wo[cnt][1],
                                      debug=self.debug)
+                    #print('out')
 
                     buf[i, j] = f * self.precomputed[cnt]
 
@@ -216,5 +218,5 @@ if __name__ == "__main__":
     render_loss = Render_Loss(7, surface_type=GY_multilayered.dielectric)
     render_loss.add_illuminant(Renderer.ILLUMINANT_TYPE.point_light, 
                                 intensity=10,
-                                light_position=[0, 0, 3])
-    render_loss.gen_data('/home/lzr/layeredBsdfData/renderloss_test2/', '/home/lzr/layeredBsdfData/renderloss_test2_out2/')
+                                light_position=[0, 0, -3])
+    render_loss.gen_data('/home/lzr/layeredBsdfData/dielectric_test_new_distribution/', '/home/lzr/layeredBsdfData/dielectric_new_distribution_renderloss_0_0_-3')
