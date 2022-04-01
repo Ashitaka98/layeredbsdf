@@ -151,7 +151,7 @@ class DatasetGenerator:
                 theta_i = (i1 +
                            uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    phi_i = (i2 + uniform(0, 1)) * pi / self.phi_sample_rate
+                    phi_i = (i2 + uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
                     wi_x = cos(theta_i) * sin(phi_i)
                     wi_y = sin(theta_i) * sin(phi_i)
                     wi_z = cos(phi_i)
@@ -163,7 +163,7 @@ class DatasetGenerator:
                         for i4 in range(self.phi_sample_rate):
                             ##### BRDF #####
                             phi_o = (i4 +
-                                     uniform(0, 1)) * pi / self.phi_sample_rate
+                                     uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
                             wo_x = cos(theta_o) * sin(phi_o)
                             wo_y = sin(theta_o) * sin(phi_o)
                             wo_z = cos(phi_o)
@@ -198,7 +198,7 @@ class DatasetGenerator:
 
                             ##### BTDF #####
                             phi_o = pi * 0.5 + (
-                                    (i4 + uniform(0, 1)) * pi / self.phi_sample_rate)
+                                    (i4 + uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate)
                             wo_x = cos(theta_o) * sin(phi_o)
                             wo_y = sin(theta_o) * sin(phi_o)
                             wo_z = cos(phi_o)
@@ -315,9 +315,12 @@ class DatasetGenerator:
 
             if not os.path.exists(self.train_output_dir + '_brdf'):
                 os.makedirs(self.train_output_dir + '_brdf')
-            
             if not os.path.exists(self.train_output_dir + '_btdf'):
                 os.makedirs(self.train_output_dir + '_btdf')
+            if not os.path.exists(self.test_output_dir + '_brdf'):
+                os.makedirs(self.test_output_dir + '_brdf')
+            if not os.path.exists(self.test_output_dir + '_btdf'):
+                os.makedirs(self.test_output_dir + '_btdf')
 
             np.save(join(self.train_output_dir + '_brdf', filename), nptable_train_brdf)
             np.save(join(self.test_output_dir + '_brdf', filename), nptable_test_brdf)

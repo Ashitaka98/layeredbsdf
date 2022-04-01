@@ -4,10 +4,7 @@ from time import time
 import random as ran
 
 
-class DatasetGenerator:
-
-    dielectric = 0
-    conductor = 1
+class DatasetGenerator_Conductor:
 
     # each bsdf table is saved as a npy
     # theta, phi is sampled uniformly
@@ -25,7 +22,6 @@ class DatasetGenerator:
                  theta_sample_rate,
                  phi_sample_rate,
                  times_per_sample,
-                 type,
                  debug=False):
         self.train_output_dir = train_output_dir
         self.test_output_dir = test_output_dir
@@ -34,7 +30,6 @@ class DatasetGenerator:
         self.phi_sample_rate = phi_sample_rate
         self.times_per_sample = times_per_sample
         self.debug = debug
-        self.type = type
 
         self.pmgr = PluginManager.getInstance()
 
@@ -51,10 +46,7 @@ class DatasetGenerator:
         for theta_i in range(theta_sample_rate):
             theta = theta_i * 2 * pi / theta_sample_rate
             for phi_i in range(phi_sample_rate):
-                if type == DatasetGenerator.dielectric:         # the attr `type` is only used here
-                    phi = phi_i * pi / phi_sample_rate
-                elif type == DatasetGenerator.conductor:
-                    phi = phi_i * 0.5 * pi / phi_sample_rate
+                phi = phi_i * 0.5 * pi / phi_sample_rate
                 self.solid_angle.append([theta, phi])
 
 
@@ -179,7 +171,7 @@ class DatasetGenerator:
                 theta_i = (i1 +
                            uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    phi_i = (i2 + uniform(0, 1)) * pi / self.phi_sample_rate
+                    phi_i = (i2 + uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
                     wi_x = cos(theta_i) * sin(phi_i)
                     wi_y = sin(theta_i) * sin(phi_i)
                     wi_z = cos(phi_i)
@@ -190,7 +182,7 @@ class DatasetGenerator:
                             0, 1)) * 2 * pi / self.theta_sample_rate
                         for i4 in range(self.phi_sample_rate):
                             phi_o = (i4 +
-                                     uniform(0, 1)) * pi / self.phi_sample_rate
+                                     uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
                             wo_x = cos(theta_o) * sin(phi_o)
                             wo_y = sin(theta_o) * sin(phi_o)
                             wo_z = cos(phi_o)
@@ -276,10 +268,10 @@ if __name__ == '__main__':
     from mitsuba.render import Intersection, BSDFSamplingRecord, ETransportMode, EMeasure
     Log('task begin')
     task_start = time()
-    generator = DatasetGenerator(
+    generator = DatasetGenerator_Conductor(
         '/home/lzr/layeredBsdfData/conductor_train',
         '/home/lzr/layeredBsdfData/conductor_test', 300, 25,
-        25, 128, DatasetGenerator.conductor, True)
+        25, 128, True)
 
     generator.readTable('/home/lzr/Projects/layeredbsdf/pyscript/material_names_table.txt')
     Log('[eta-k] Read ' + str(len(generator.material_table)) + ' material presets')
