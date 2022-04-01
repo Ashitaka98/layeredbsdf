@@ -5,8 +5,9 @@ from time import time
 
 class DatasetGenerator:
 
-    dielectric = 0
-    conductor = 1
+    bsdf = 0
+    brdf = 1
+    btdf = 2
 
     # each bsdf table is saved as a npy
     # theta, phi is sampled uniformly
@@ -48,10 +49,12 @@ class DatasetGenerator:
         for theta_i in range(theta_sample_rate):
             theta = theta_i * 2 * pi / theta_sample_rate
             for phi_i in range(phi_sample_rate):
-                if type == DatasetGenerator.dielectric:
+                if type == DatasetGenerator.bsdf:
                     phi = phi_i * pi / phi_sample_rate
-                elif type == DatasetGenerator.conductor:
+                elif type == DatasetGenerator.brdf or type == DatasetGenerator.btdf:
                     phi = phi_i * 0.5 * pi / phi_sample_rate
+                else:
+                    raise Exception('illegal type')
                 self.solid_angle.append([theta, phi])
 
     def run(self):
@@ -149,7 +152,12 @@ class DatasetGenerator:
                 theta_i = (i1 +
                            uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    phi_i = (i2 + uniform(0, 1)) * pi / self.phi_sample_rate
+                    if self.type == DatasetGenerator.brdf or self.type == DatasetGenerator.btdf:
+                        phi_i = (i2 + uniform(
+                            0, 1)) * 0.5 * pi / self.phi_sample_rate
+                    elif self.type == DatasetGenerator.bsdf:
+                        phi_i = (i2 +
+                                 uniform(0, 1)) * pi / self.phi_sample_rate
                     wi_x = cos(theta_i) * sin(phi_i)
                     wi_y = sin(theta_i) * sin(phi_i)
                     wi_z = cos(phi_i)
@@ -159,8 +167,15 @@ class DatasetGenerator:
                         theta_o = (i3 + uniform(
                             0, 1)) * 2 * pi / self.theta_sample_rate
                         for i4 in range(self.phi_sample_rate):
-                            phi_o = (i4 +
-                                     uniform(0, 1)) * pi / self.phi_sample_rate
+                            if self.type == DatasetGenerator.brdf:
+                                phi_o = (i4 + uniform(
+                                    0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            elif self.type == DatasetGenerator.btdf:
+                                phi_o = 0.5 * pi + (i4 + uniform(
+                                    0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            elif self.type == DatasetGenerator.bsdf:
+                                phi_o = (i4 + uniform(
+                                    0, 1)) * pi / self.phi_sample_rate
                             wo_x = cos(theta_o) * sin(phi_o)
                             wo_y = sin(theta_o) * sin(phi_o)
                             wo_z = cos(phi_o)
@@ -203,6 +218,8 @@ class DatasetGenerator:
                 its.wi = wi
                 for omega_o in self.solid_angle:
                     theta_o, phi_o = omega_o
+                    if self.type == DatasetGenerator.btdf:
+                        phi_o += 0.5 * pi
                     wo_x = cos(theta_o) * sin(phi_o)
                     wo_y = sin(theta_o) * sin(phi_o)
                     wo_z = cos(phi_o)
@@ -247,8 +264,8 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_train_new_distribution',
-        '/home/lzr/layeredBsdfData/dielectric_test_new_distribution', 300, 25,
-        25, 128, DatasetGenerator.dielectric, True)
+        '/home/lzr/layeredBsdfData/dielectric_uphemi_train',
+        '/home/lzr/layeredBsdfData/dielectric_uphemi_test', 300, 25, 25, 128,
+        DatasetGenerator.bsdf, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
