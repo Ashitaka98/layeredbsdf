@@ -2,6 +2,7 @@ from math import cos, sin
 import numpy as np
 from time import time
 import random as ran
+import os
 
 
 class DatasetGenerator_Conductor:
@@ -168,19 +169,19 @@ class DatasetGenerator_Conductor:
             its = Intersection()
             table_train = []
             for i1 in range(self.theta_sample_rate):
-                theta_i = (i1 +
-                           uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    phi_i = (i2 + uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
-                    wi_x = cos(theta_i) * sin(phi_i)
-                    wi_y = sin(theta_i) * sin(phi_i)
-                    wi_z = cos(phi_i)
-                    wi = Vector3(wi_x, wi_y, wi_z)
-                    its.wi = wi
                     for i3 in range(self.theta_sample_rate):
-                        theta_o = (i3 + uniform(
-                            0, 1)) * 2 * pi / self.theta_sample_rate
                         for i4 in range(self.phi_sample_rate):
+                            theta_i = (i1 +
+                                        uniform(0, 1)) * 2 * pi / self.theta_sample_rate
+                            phi_i = (i2 + uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            wi_x = cos(theta_i) * sin(phi_i)
+                            wi_y = sin(theta_i) * sin(phi_i)
+                            wi_z = cos(phi_i)
+                            wi = Vector3(wi_x, wi_y, wi_z)
+                            its.wi = wi
+                            theta_o = (i3 + uniform(
+                                        0, 1)) * 2 * pi / self.theta_sample_rate
                             phi_o = (i4 +
                                      uniform(0, 1)) * 0.5 * pi / self.phi_sample_rate
                             wo_x = cos(theta_o) * sin(phi_o)
@@ -254,6 +255,12 @@ class DatasetGenerator_Conductor:
                         theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
                         accum[2]
                     ])
+
+            if not os.path.exists(self.train_output_dir):
+                os.makedirs(self.train_output_dir)
+            if not os.path.exists(self.test_output_dir):
+                os.makedirs(self.test_output_dir)
+            
             nptable_train = np.array(table_train).astype(np.float32)
             nptable_test = np.array(table_test).astype(np.float32)
 
