@@ -1,6 +1,7 @@
 from math import cos, sin
 import numpy as np
 from time import time
+import os
 
 
 class DatasetGenerator:
@@ -80,9 +81,9 @@ class DatasetGenerator:
 
             # normal semi-sphere
             theta_0 = uniform(0, 2 * pi)
-            phi_0 = uniform(0, 0.4 * pi)
+            phi_0 = uniform(0, 0.45 * pi)
             theta_1 = uniform(0, 2 * pi)
-            phi_1 = uniform(0, 0.4 * pi)
+            phi_1 = uniform(0, 0.45 * pi)
 
             # ior 1.05-2
             eta_0 = uniform(1.05, 2)
@@ -149,24 +150,26 @@ class DatasetGenerator:
             its = Intersection()
             table_train = []
             for i1 in range(self.theta_sample_rate):
-                theta_i = (i1 +
-                           uniform(0, 1)) * 2 * pi / self.theta_sample_rate
                 for i2 in range(self.phi_sample_rate):
-                    if self.type == DatasetGenerator.brdf or self.type == DatasetGenerator.btdf:
-                        phi_i = (i2 + uniform(
-                            0, 1)) * 0.5 * pi / self.phi_sample_rate
-                    elif self.type == DatasetGenerator.bsdf:
-                        phi_i = (i2 +
-                                 uniform(0, 1)) * pi / self.phi_sample_rate
-                    wi_x = cos(theta_i) * sin(phi_i)
-                    wi_y = sin(theta_i) * sin(phi_i)
-                    wi_z = cos(phi_i)
-                    wi = Vector3(wi_x, wi_y, wi_z)
-                    its.wi = wi
                     for i3 in range(self.theta_sample_rate):
-                        theta_o = (i3 + uniform(
-                            0, 1)) * 2 * pi / self.theta_sample_rate
                         for i4 in range(self.phi_sample_rate):
+
+                            theta_i = (i1 + uniform(
+                                0, 1)) * 2 * pi / self.theta_sample_rate
+                            if self.type == DatasetGenerator.brdf or self.type == DatasetGenerator.btdf:
+                                phi_i = (i2 + uniform(
+                                    0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            elif self.type == DatasetGenerator.bsdf:
+                                phi_i = (i2 + uniform(
+                                    0, 1)) * pi / self.phi_sample_rate
+                            wi_x = cos(theta_i) * sin(phi_i)
+                            wi_y = sin(theta_i) * sin(phi_i)
+                            wi_z = cos(phi_i)
+                            wi = Vector3(wi_x, wi_y, wi_z)
+                            its.wi = wi
+
+                            theta_o = (i3 + uniform(
+                                0, 1)) * 2 * pi / self.theta_sample_rate
                             if self.type == DatasetGenerator.brdf:
                                 phi_o = (i4 + uniform(
                                     0, 1)) * 0.5 * pi / self.phi_sample_rate
@@ -249,6 +252,12 @@ class DatasetGenerator:
                         theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
                         accum[2]
                     ])
+
+            if not os.path.exists(self.train_output_dir):
+                os.makedirs(self.train_output_dir)
+            if not os.path.exists(self.test_output_dir):
+                os.makedirs(self.test_output_dir)
+
             nptable_train = np.array(table_train).astype(np.float32)
             nptable_test = np.array(table_test).astype(np.float32)
 
@@ -264,8 +273,8 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_uphemi_train',
-        '/home/lzr/layeredBsdfData/dielectric_uphemi_test', 300, 25, 25, 128,
-        DatasetGenerator.bsdf, True)
+        '/home/lzr/layeredBsdfData/dielectric_brdf_train',
+        '/home/lzr/layeredBsdfData/dielectric_brdf_test', 300, 25, 25, 128,
+        DatasetGenerator.brdf, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
