@@ -211,58 +211,62 @@ class DatasetGenerator:
                                 accum[1], accum[2]
                             ])
 
-            table_test = []
-            for omega_i in self.solid_angle:
-                theta_i, phi_i = omega_i
-                wi_x = cos(theta_i) * sin(phi_i)
-                wi_y = sin(theta_i) * sin(phi_i)
-                wi_z = cos(phi_i)
-                wi = Vector3(wi_x, wi_y, wi_z)
-                its.wi = wi
-                for omega_o in self.solid_angle:
-                    theta_o, phi_o = omega_o
-                    if self.type == DatasetGenerator.btdf:
-                        phi_o += 0.5 * pi
-                    wo_x = cos(theta_o) * sin(phi_o)
-                    wo_y = sin(theta_o) * sin(phi_o)
-                    wo_z = cos(phi_o)
-                    wo = Vector3(wo_x, wo_y, wo_z)
-                    bRec = BSDFSamplingRecord(its, self.sampler,
-                                              ETransportMode.ERadiance)
-                    bRec.wi = wi
-                    bRec.wo = wo
-                    accum = Spectrum(0)
-                    nan_count = 0
-                    for i in range(self.times_per_sample):
-                        ret = layered.eval(bRec, EMeasure.ESolidAngle)
-                        if np.isnan(ret[0]) or np.isnan(ret[1]) or np.isnan(
-                                ret[2]):
-                            nan_count += 1
-                        else:
-                            accum += ret
-                    if wo_z != 0:
-                        accum /= abs(wo_z)
-                    if self.debug and nan_count != 0:
-                        Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
-                            .format(theta_i, phi_i, theta_o, phi_o, nan_count))
-                    if nan_count == self.times_per_sample:
-                        raise Exception('all \'eval\' calls return NaN ')
-                    accum /= self.times_per_sample - nan_count
-                    table_test.append([
-                        theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
-                        accum[2]
-                    ])
+            if self.test_output_dir is not None:
+                table_test = []
+                for omega_i in self.solid_angle:
+                    theta_i, phi_i = omega_i
+                    wi_x = cos(theta_i) * sin(phi_i)
+                    wi_y = sin(theta_i) * sin(phi_i)
+                    wi_z = cos(phi_i)
+                    wi = Vector3(wi_x, wi_y, wi_z)
+                    its.wi = wi
+                    for omega_o in self.solid_angle:
+                        theta_o, phi_o = omega_o
+                        if self.type == DatasetGenerator.btdf:
+                            phi_o += 0.5 * pi
+                        wo_x = cos(theta_o) * sin(phi_o)
+                        wo_y = sin(theta_o) * sin(phi_o)
+                        wo_z = cos(phi_o)
+                        wo = Vector3(wo_x, wo_y, wo_z)
+                        bRec = BSDFSamplingRecord(its, self.sampler,
+                                                  ETransportMode.ERadiance)
+                        bRec.wi = wi
+                        bRec.wo = wo
+                        accum = Spectrum(0)
+                        nan_count = 0
+                        for i in range(self.times_per_sample):
+                            ret = layered.eval(bRec, EMeasure.ESolidAngle)
+                            if np.isnan(ret[0]) or np.isnan(
+                                    ret[1]) or np.isnan(ret[2]):
+                                nan_count += 1
+                            else:
+                                accum += ret
+                        if wo_z != 0:
+                            accum /= abs(wo_z)
+                        if self.debug and nan_count != 0:
+                            Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
+                                .format(theta_i, phi_i, theta_o, phi_o,
+                                        nan_count))
+                        if nan_count == self.times_per_sample:
+                            raise Exception('all \'eval\' calls return NaN ')
+                        accum /= self.times_per_sample - nan_count
+                        table_test.append([
+                            theta_i, phi_i, theta_o, phi_o, accum[0], accum[1],
+                            accum[2]
+                        ])
 
             if not os.path.exists(self.train_output_dir):
                 os.makedirs(self.train_output_dir)
-            if not os.path.exists(self.test_output_dir):
+            if self.test_output_dir is not None and not os.path.exists(
+                    self.test_output_dir):
                 os.makedirs(self.test_output_dir)
 
             nptable_train = np.array(table_train).astype(np.float32)
-            nptable_test = np.array(table_test).astype(np.float32)
-
             np.save(join(self.train_output_dir, filename), nptable_train)
-            np.save(join(self.test_output_dir, filename), nptable_test)
+
+            if self.test_output_dir is not None:
+                nptable_test = np.array(table_test).astype(np.float32)
+                np.save(join(self.test_output_dir, filename), nptable_test)
             Log('time:' + str(time() - start) + 's')
 
 
@@ -273,8 +277,7 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_brdf_train',
-        '/home/lzr/layeredBsdfData/dielectric_brdf_test', 300, 25, 25, 128,
-        DatasetGenerator.brdf, True)
+        '/home/lzr/layeredBsdfData/dielectric_brdf_train', None, 300, 25, 25,
+        128, DatasetGenerator.brdf, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
