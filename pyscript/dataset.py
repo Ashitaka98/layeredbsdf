@@ -73,7 +73,7 @@ class DatasetGenerator:
                 1 - uniform(0, 1)**2, 1 - uniform(0, 1)**2,
                 1 - uniform(0, 1)**2
             ]
-            g = uniform(-0.9, 0.9)
+            g = 0.0
 
             # roughness 0.216^3-1
             alpha_0 = uniform(0.216, 1)**3
@@ -277,7 +277,7 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_brdf_train', None, 300, 25, 25,
+        '/home/lzr/layeredBsdfData/dielectric_brdf_gFixed', None, 300, 25, 25,
         128, DatasetGenerator.brdf, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
