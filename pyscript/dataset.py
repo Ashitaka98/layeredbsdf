@@ -75,19 +75,19 @@ class DatasetGenerator:
             ]
             g = 0.0
 
-            # roughness 0.216^3-1
-            alpha_0 = uniform(0.216, 1)**3
-            alpha_1 = uniform(0.216, 1)**3
+            # roughness 0.001-1
+            alpha_0 = 10**uniform(-3, -0.5)
+            alpha_1 = 10**uniform(-3, 0)
 
             # normal semi-sphere
             theta_0 = uniform(0, 2 * pi)
-            phi_0 = uniform(0, 0.45 * pi)
+            phi_0 = uniform(0, 0.4 * pi)
             theta_1 = uniform(0, 2 * pi)
-            phi_1 = uniform(0, 0.45 * pi)
+            phi_1 = uniform(0, 0.4 * pi)
 
             # ior 1.05-2
-            eta_0 = uniform(1.05, 2)
-            eta_1 = uniform(1.05, 2)
+            eta_0 = uniform(1.2, 1.8)
+            eta_1 = uniform(1.2, 1.8)
 
             layered = self.pmgr.create({
                 'type':
@@ -277,7 +277,7 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_brdf_gFixed', None, 300, 25, 25,
-        128, DatasetGenerator.brdf, True)
+        '/home/lzr/layeredBsdfData/dielectric_brdf_gFixed_new', None, 300, 25,
+        25, 128, DatasetGenerator.brdf, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
