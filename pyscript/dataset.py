@@ -9,6 +9,8 @@ class DatasetGenerator:
     bsdf = 0
     brdf = 1
     btdf = 2
+    brdf_backside = 3
+    btdf_backside = 4
 
     # each bsdf table is saved as a npy
     # theta, phi is sampled uniformly
@@ -52,7 +54,7 @@ class DatasetGenerator:
             for phi_i in range(phi_sample_rate):
                 if type == DatasetGenerator.bsdf:
                     phi = phi_i * pi / phi_sample_rate
-                elif type == DatasetGenerator.brdf or type == DatasetGenerator.btdf:
+                elif type == DatasetGenerator.brdf or type == DatasetGenerator.btdf or type == DatasetGenerator.brdf_backside or type == DatasetGenerator.btdf_backside:
                     phi = phi_i * 0.5 * pi / phi_sample_rate
                 else:
                     raise Exception('illegal type')
@@ -80,14 +82,14 @@ class DatasetGenerator:
             alpha_1 = 10**uniform(-3, 0)
 
             # normal semi-sphere
-            theta_0 = uniform(0, 2 * pi)
-            phi_0 = uniform(0, 0.4 * pi)
-            theta_1 = uniform(0, 2 * pi)
-            phi_1 = uniform(0, 0.4 * pi)
+            theta_0 = 0
+            phi_0 = 0
+            theta_1 = 0
+            phi_1 = 0
 
             # ior 1.05-2
-            eta_0 = uniform(1.2, 1.8)
-            eta_1 = uniform(1.2, 1.8)
+            eta_0 = uniform(1.05, 2)
+            eta_1 = uniform(1.05, 2)
 
             layered = self.pmgr.create({
                 'type':
@@ -159,6 +161,9 @@ class DatasetGenerator:
                             if self.type == DatasetGenerator.brdf or self.type == DatasetGenerator.btdf:
                                 phi_i = (i2 + uniform(
                                     0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            elif self.type == DatasetGenerator.brdf_backside or self.type == DatasetGenerator.btdf_backside:
+                                phi_i = 0.5 * pi + (i2 + uniform(
+                                    0, 1)) * 0.5 * pi / self.phi_sample_rate
                             elif self.type == DatasetGenerator.bsdf:
                                 phi_i = (i2 + uniform(
                                     0, 1)) * pi / self.phi_sample_rate
@@ -170,10 +175,10 @@ class DatasetGenerator:
 
                             theta_o = (i3 + uniform(
                                 0, 1)) * 2 * pi / self.theta_sample_rate
-                            if self.type == DatasetGenerator.brdf:
+                            if self.type == DatasetGenerator.brdf or self.type == DatasetGenerator.btdf_backside:
                                 phi_o = (i4 + uniform(
                                     0, 1)) * 0.5 * pi / self.phi_sample_rate
-                            elif self.type == DatasetGenerator.btdf:
+                            elif self.type == DatasetGenerator.btdf or self.type == DatasetGenerator.brdf_backside:
                                 phi_o = 0.5 * pi + (i4 + uniform(
                                     0, 1)) * 0.5 * pi / self.phi_sample_rate
                             elif self.type == DatasetGenerator.bsdf:
@@ -198,6 +203,8 @@ class DatasetGenerator:
                                     accum += ret
                             if wo_z != 0:
                                 accum /= abs(wo_z)
+                            else:
+                                raise Exception('wo_z is zero')
                             if self.debug and nan_count != 0:
                                 Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
                                     .format(theta_i, phi_i, theta_o, phi_o,
@@ -222,7 +229,9 @@ class DatasetGenerator:
                     its.wi = wi
                     for omega_o in self.solid_angle:
                         theta_o, phi_o = omega_o
-                        if self.type == DatasetGenerator.btdf:
+                        if self.type == DatasetGenerator.brdf_backside or self.type == DatasetGenerator.btdf_backside:
+                            phi_i += 0.5 * pi
+                        if self.type == DatasetGenerator.btdf or self.type == DatasetGenerator.brdf_backside:
                             phi_o += 0.5 * pi
                         wo_x = cos(theta_o) * sin(phi_o)
                         wo_y = sin(theta_o) * sin(phi_o)
@@ -243,6 +252,8 @@ class DatasetGenerator:
                                 accum += ret
                         if wo_z != 0:
                             accum /= abs(wo_z)
+                        else:
+                            raise Exception('wo_z is zero')
                         if self.debug and nan_count != 0:
                             Log('Sampling theta_i:{:.2f} phi_i:{:.2f} theta_o:{:.2f}, phi_o:{:.2f} | NaN occur {} times '
                                 .format(theta_i, phi_i, theta_o, phi_o,
@@ -277,7 +288,7 @@ if __name__ == '__main__':
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator(
-        '/home/lzr/layeredBsdfData/dielectric_brdf_gFixed_new', None, 300, 25,
-        25, 128, DatasetGenerator.brdf, True)
+        '/home/lzr/layeredBsdfData/dielectric_btdfbackside_withoutNormal',
+        None, 300, 25, 25, 128, DatasetGenerator.btdf_backside, True)
     generator.run()
     Log('total time: ' + str(time() - task_start) + 's')
