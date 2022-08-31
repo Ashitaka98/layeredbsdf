@@ -169,23 +169,26 @@ class DatasetGenerator_Conductor:
                 for i2 in range(self.phi_sample_rate):
                     for i3 in range(self.theta_sample_rate):
                         for i4 in range(self.phi_sample_rate):
-                            theta_i = (i1 + uniform(
+                            theta_h = (i1 + uniform(
                                 0, 1)) * 2 * pi / self.theta_sample_rate
-                            phi_i = (i2 + uniform(
+                            phi_h = (i2 + uniform(
                                 0, 1)) * 0.5 * pi / self.phi_sample_rate
-                            wi_x = cos(theta_i) * sin(phi_i)
-                            wi_y = sin(theta_i) * sin(phi_i)
-                            wi_z = cos(phi_i)
-                            wi = Vector3(wi_x, wi_y, wi_z)
+                            theta_d = (i3 + uniform(
+                                0, 1)) * 2 * pi / self.theta_sample_rate
+                            phi_d = (i4 + uniform(
+                                0, 1)) * 0.5 * pi / self.phi_sample_rate
+                            theta_i, phi_i, theta_o, phi_o = whwd_to_wiwo(
+                                [theta_h, phi_h, theta_d, phi_d])
+                            x1 = cos(theta_i) * sin(phi_i)
+                            y1 = sin(theta_i) * sin(phi_i)
+                            z1 = cos(phi_i)
+                            x2 = cos(theta_o) * sin(phi_o)
+                            y2 = sin(theta_o) * sin(phi_o)
+                            z2 = cos(phi_o)
+                            wi = Vector3(x1, y1, z1)
+                            wo = Vector3(x2, y2, z2)
                             its.wi = wi
-                            theta_o = (i3 + uniform(
-                                0, 1)) * 2 * pi / self.theta_sample_rate
-                            phi_o = (i4 + uniform(
-                                0, 1)) * 0.5 * pi / self.phi_sample_rate
-                            wo_x = cos(theta_o) * sin(phi_o)
-                            wo_y = sin(theta_o) * sin(phi_o)
-                            wo_z = cos(phi_o)
-                            wo = Vector3(wo_x, wo_y, wo_z)
+                            its.wo = wo
                             bRec = BSDFSamplingRecord(its, self.sampler,
                                                       ETransportMode.ERadiance)
                             bRec.wi = wi
@@ -199,8 +202,8 @@ class DatasetGenerator_Conductor:
                                     nan_count += 1
                                 else:
                                     accum += ret
-                            if wo_z != 0:
-                                accum /= abs(wo_z)
+                            if wo[2] != 0:
+                                accum /= abs(wo[2])
                             else:
                                 raise Exception('wo_z is zero')
                             if self.debug and nan_count != 0:
@@ -274,14 +277,14 @@ class DatasetGenerator_Conductor:
 
 
 if __name__ == '__main__':
-    from utils import Log
+    from utils import Log, whwd_to_wiwo_xyz, whwd_to_wiwo, wiwo_to_whwd
     from mitsuba.core import PluginManager, Properties, Vector3, Spectrum
     from mitsuba.render import Intersection, BSDFSamplingRecord, ETransportMode, EMeasure
     Log('task begin')
     task_start = time()
     generator = DatasetGenerator_Conductor(
-        '/home/lzr/layeredBsdfData/conductor_withoutNormal', None, 300, 25, 25,
-        128, True)
+        '/home/lzr/layeredBsdfData/conductor_whwd', None, 300, 25, 25, 128,
+        True)
 
     generator.readTable(
         '/home/lzr/Projects/layeredbsdf/pyscript/material_names_table.txt')
