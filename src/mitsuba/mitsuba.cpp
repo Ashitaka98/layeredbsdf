@@ -21,7 +21,7 @@
 // Mitsuba's "Assert" macro conflicts with Xerces' XSerializeEngine::Assert(...).
 // This becomes a problem when using a PCH which contains mitsuba/core/logger.h
 #if defined(Assert)
-# undef Assert
+#undef Assert
 #endif
 #include <xercesc/parsers/SAXParser.hpp>
 #include <mitsuba/core/sched_remote.h>
@@ -45,379 +45,291 @@
 #include <signal.h>
 #endif
 
+#include "misc/utils.h"
+#include <cnpy.h>
+
 using XERCES_CPP_NAMESPACE::SAXParser;
 
 using namespace mitsuba;
 
-void help() {
-    cout <<  "Mitsuba version " << Version(MTS_VERSION).toStringComplete()
-         << ", Copyright (c) " MTS_YEAR " Wenzel Jakob" << endl;
-    cout <<  "Usage: mitsuba [options] <One or more scene XML files>" << endl;
-    cout <<  "Options/Arguments:" << endl;
-    cout <<  "   -h          Display this help text" << endl << endl;
-    cout <<  "   -D key=val  Define a constant, which can referenced as \"$key\" in the scene" << endl << endl;
-    cout <<  "   -o fname    Write the output image to the file denoted by \"fname\"" << endl << endl;
-    cout <<  "   -a p1;p2;.. Add one or more entries to the resource search path" << endl << endl;
-    cout <<  "   -p count    Override the detected number of processors. Useful for reducing" << endl;
-    cout <<  "               the load or creating scheduling-only nodes in conjunction with"  << endl;
-    cout <<  "               the -c and -s parameters, e.g. -p 0 -c host1;host2;host3,..." << endl << endl;
-    cout <<  "   -q          Quiet mode - do not print any log messages to stdout" << endl << endl;
-    cout <<  "   -c hosts    Network rendering: connect to mtssrv instances over a network." << endl;
-    cout <<  "               Requires a semicolon-separated list of host names of the form" << endl;
-    cout <<  "                       host.domain[:port] for a direct connection" << endl;
-    cout <<  "                 or" << endl;
-    cout <<  "                       user@host.domain[:path] for a SSH connection (where" << endl;
-    cout <<  "                       \"path\" denotes the place where Mitsuba is checked" << endl;
-    cout <<  "                       out -- by default, \"~/mitsuba\" is used)" << endl << endl;
-    cout <<  "   -s file     Connect to additional Mitsuba servers specified in a file" << endl;
-    cout <<  "               with one name per line (same format as in -c)" << endl<< endl;
-    cout <<  "   -j count    Simultaneously schedule several scenes. Can sometimes accelerate" << endl;
-    cout <<  "               rendering when large amounts of processing power are available" << endl;
-    cout <<  "               (e.g. when running Mitsuba on a cluster. Default: 1)" << endl << endl;
-    cout <<  "   -n name     Assign a node name to this instance (Default: host name)" << endl << endl;
-    cout <<  "   -x          Skip rendering of files where output already exists" << endl << endl;
-    cout <<  "   -r sec      Write (partial) output images every 'sec' seconds" << endl << endl;
-    cout <<  "   -b res      Specify the block resolution used to split images into parallel" << endl;
-    cout <<  "               workloads (default: 32). Only applies to some integrators." << endl << endl;
-    cout <<  "   -v          Be more verbose (can be specified twice)" << endl << endl;
-    cout <<  "   -L level    Explicitly specify the log level (trace/debug/info/warn/error)" << endl << endl;
-    cout <<  "   -w          Treat warnings as errors" << endl << endl;
-    cout <<  "   -z          Disable progress bars" << endl << endl;
-    cout <<  " For documentation, please refer to http://www.mitsuba-renderer.org/docs.html" << endl;
-}
+#define SAMPLE_RATE 25
+#define SAMPLES (SAMPLE_RATE * SAMPLE_RATE * SAMPLE_RATE * SAMPLE_RATE)
+#define SAMPLE_PER_QUERY 128
+
+#define MATERIAL_TABLE_PATH "/home/lzr/Projects/layeredbsdf_mini/pyscript/material_names_table.txt"
+
+#define OUTPUT_DIR "/home/lzr/layeredBsdfData/conductorWhwd_cpp"
 
 ref<RenderQueue> renderQueue = NULL;
 
 #if !defined(__WINDOWS__)
 /* Handle the hang-up signal and write a partially rendered image to disk */
-void signalHandler(int signal) {
-    if (signal == SIGHUP && renderQueue.get()) {
+void signalHandler(int signal)
+{
+    if (signal == SIGHUP && renderQueue.get())
+    {
         renderQueue->flush();
-    } else if (signal == SIGFPE) {
+    }
+    else if (signal == SIGFPE)
+    {
         SLog(EWarn, "Caught a floating-point exception!");
 
-        #if defined(MTS_DEBUG_FP)
+#if defined(MTS_DEBUG_FP)
         /* Generate a core dump! */
         abort();
-        #endif
+#endif
     }
 }
 #endif
 
-class FlushThread : public Thread {
+class FlushThread : public Thread
+{
 public:
     FlushThread(int timeout) : Thread("flush"),
-        m_flag(new WaitFlag()),
-        m_timeout(timeout) { }
+                               m_flag(new WaitFlag()),
+                               m_timeout(timeout) {}
 
-    void run() {
-        while (!m_flag->get()) {
+    void run()
+    {
+        while (!m_flag->get())
+        {
             m_flag->wait(m_timeout * 1000);
             renderQueue->flush();
         }
     }
 
-    void quit() {
+    void quit()
+    {
         m_flag->set(true);
         join();
     }
+
 private:
     ref<WaitFlag> m_flag;
     int m_timeout;
 };
 
-int mitsuba_app(int argc, char **argv) {
-    int optchar;
-    char *end_ptr = NULL;
+std::vector<std::string> read_material_table(std::string path)
+{
+    std::vector<std::string> ret;
+    std::ifstream is(path.c_str());
+    assert(is.is_open());
+    while (!is.eof())
+    {
+        std::string name;
+        is >> name;
+        if (name != "")
+            ret.push_back(name);
+    }
+    assert(ret.size() == 71);
+    return move(ret);
+}
 
-    try {
-        /* Default settings */
-        int nprocs_avail = getCoreCount(), nprocs = nprocs_avail;
-        int numParallelScenes = 1;
-        std::string nodeName = getHostName(),
-                    networkHosts = "", destFile="";
-        bool quietMode = false, progressBars = true, skipExisting = false;
-        ELogLevel logLevel = EInfo;
-        ref<FileResolver> fileResolver = Thread::getThread()->getFileResolver();
-        bool treatWarningsAsErrors = false;
-        std::map<std::string, std::string, SimpleStringOrdering> parameters;
-        int blockSize = 32;
-        int flushTimer = -1;
+static inline float pow2(float x)
+{
+    return x * x;
+}
 
-        if (argc < 2) {
-            help();
-            return 0;
-        }
+static inline float warpUniform(float x1, float x2, float x)
+{
+    float len = x2 - x1;
+    return len * x + x1;
+}
 
-        optind = 1;
-        /* Parse command-line arguments */
-        while ((optchar = getopt(argc, argv, "a:c:D:s:j:n:o:r:b:p:L:qhzvtwx")) != -1) {
-            switch (optchar) {
-                case 'a': {
-                        std::vector<std::string> paths = tokenize(optarg, ";");
-                        for (int i=(int) paths.size()-1; i>=0; --i)
-                            fileResolver->prependPath(paths[i]);
-                    }
-                    break;
-                case 'c':
-                    networkHosts = networkHosts + std::string(";") + std::string(optarg);
-                    break;
-                case 'w':
-                    treatWarningsAsErrors = true;
-                    break;
-                case 'D': {
-                        std::vector<std::string> param = tokenize(optarg, "=");
-                        if (param.size() != 2)
-                            SLog(EError, "Invalid parameter specification \"%s\"", optarg);
-                        parameters[param[0]] = param[1];
-                    }
-                    break;
-                case 's': {
-                        std::ifstream is(optarg);
-                        if (is.fail())
-                            SLog(EError, "Could not open host file!");
-                        std::string host;
-                        while (is >> host) {
-                            if (host.length() < 1 || host.c_str()[0] == '#')
-                                continue;
-                            networkHosts = networkHosts + std::string(";") + host;
-                        }
-                    }
-                    break;
-                case 'n':
-                    nodeName = optarg;
-                    break;
-                case 'o':
-                    destFile = optarg;
-                    break;
-                case 'v':
-                    if (logLevel != EDebug)
-                        logLevel = EDebug;
-                    else
-                        logLevel = ETrace;
-                    break;
-                case 'L': {
-                        std::string arg = boost::to_lower_copy(std::string(optarg));
-                        if (arg == "trace")
-                            logLevel = ETrace;
-                        else if (arg == "debug")
-                            logLevel = EDebug;
-                        else if (arg == "info")
-                            logLevel = EInfo;
-                        else if (arg == "warn")
-                            logLevel = EWarn;
-                        else if (arg == "error")
-                            logLevel = EError;
-                        else
-                            SLog(EError, "Invalid log level!");
-                    }
-                    break;
-                case 'x':
-                    skipExisting = true;
-                    break;
-                case 'p':
-                    nprocs = strtol(optarg, &end_ptr, 10);
-                    if (*end_ptr != '\0')
-                        SLog(EError, "Could not parse the processor count!");
-                    break;
-                case 'j':
-                    numParallelScenes = strtol(optarg, &end_ptr, 10);
-                    if (*end_ptr != '\0')
-                        SLog(EError, "Could not parse the parallel scene count!");
-                    break;
-                case 'r':
-                    flushTimer = strtol(optarg, &end_ptr, 10);
-                    if (*end_ptr != '\0')
-                        SLog(EError, "Could not parse the '-r' parameter argument!");
-                    break;
-                case 'b':
-                    blockSize = strtol(optarg, &end_ptr, 10);
-                    if (*end_ptr != '\0')
-                        SLog(EError, "Could not parse the block size!");
-                    if (blockSize < 2 || blockSize > 128)
-                        SLog(EError, "Invalid block size (should be in the range 2-128)");
-                    break;
-                case 'z':
-                    progressBars = false;
-                    break;
-                case 'q':
-                    quietMode = true;
-                    break;
-                case 'h':
-                default:
-                    help();
-                    return 0;
-            }
-        }
-
-        ProgressReporter::setEnabled(progressBars);
-
-        /* Initialize OpenMP */
-        Thread::initializeOpenMP(nprocs);
-
-        /* Configure the logging subsystem */
-        ref<Logger> log = Thread::getThread()->getLogger();
-        log->setLogLevel(logLevel);
-        log->setErrorLevel(treatWarningsAsErrors ? EWarn : EError);
-
-        /* Disable the default appenders */
-        for (size_t i=0; i<log->getAppenderCount(); ++i) {
-            Appender *appender = log->getAppender(i);
-            if (appender->getClass()->derivesFrom(MTS_CLASS(StreamAppender)))
-                log->removeAppender(appender);
-        }
-
-        log->addAppender(new StreamAppender(formatString("mitsuba.%s.log", nodeName.c_str())));
-        if (!quietMode)
-            log->addAppender(new StreamAppender(&std::cout));
-
-        SLog(EInfo, "Mitsuba version %s, Copyright (c) " MTS_YEAR " Wenzel Jakob",
-                Version(MTS_VERSION).toStringComplete().c_str());
-
-        /* Configure the scheduling subsystem */
-        Scheduler *scheduler = Scheduler::getInstance();
-        bool useCoreAffinity = nprocs == nprocs_avail;
-        for (int i=0; i<nprocs; ++i)
-            scheduler->registerWorker(new LocalWorker(useCoreAffinity ? i : -1,
-                formatString("wrk%i", i)));
-        std::vector<std::string> hosts = tokenize(networkHosts, ";");
-
-        /* Establish network connections to nested servers */
-        for (size_t i=0; i<hosts.size(); ++i) {
-            const std::string &hostName = hosts[i];
-            ref<Stream> stream;
-
-            if (hostName.find("@") == std::string::npos) {
-                int port = MTS_DEFAULT_PORT;
-                std::vector<std::string> tokens = tokenize(hostName, ":");
-                if (tokens.size() == 0 || tokens.size() > 2) {
-                    SLog(EError, "Invalid host specification '%s'!", hostName.c_str());
-                } else if (tokens.size() == 2) {
-                    port = strtol(tokens[1].c_str(), &end_ptr, 10);
-                    if (*end_ptr != '\0')
-                        SLog(EError, "Invalid host specification '%s'!", hostName.c_str());
-                }
-                stream = new SocketStream(tokens[0], port);
-            } else {
-                std::string path = "~/mitsuba"; // default path if not specified
-                std::vector<std::string> tokens = tokenize(hostName, "@:");
-                if (tokens.size() < 2 || tokens.size() > 3) {
-                    SLog(EError, "Invalid host specification '%s'!", hostName.c_str());
-                } else if (tokens.size() == 3) {
-                    path = tokens[2];
-                }
-                std::vector<std::string> cmdLine;
-                cmdLine.push_back(formatString("bash -c 'cd %s; . setpath.sh; mtssrv -ls'", path.c_str()));
-                stream = new SSHStream(tokens[0], tokens[1], cmdLine);
-            }
-            try {
-                scheduler->registerWorker(new RemoteWorker(formatString("net%i", i), stream));
-            } catch (std::runtime_error &e) {
-                if (hostName.find("@") != std::string::npos) {
-#if defined(__WINDOWS__)
-                    SLog(EWarn, "Please ensure that passwordless authentication "
-                        "using plink.exe and pageant.exe is enabled (see the documentation for more information)");
-#else
-                    SLog(EWarn, "Please ensure that passwordless authentication "
-                        "is enabled (e.g. using ssh-agent - see the documentation for more information)");
-#endif
-                }
-                throw e;
-            }
-        }
-
-        scheduler->start();
-
+int mitsuba_app(int argc, char **argv)
+{
+    if (argc != 2)
+    {
+        cout << "usage: mitsuba ${material count}\n";
+        return 1;
+    }
+    int count = atoi(argv[1]);
+    if (count < 0)
+    {
+        cout << "${material count} must be an integer greater than zero\n";
+        return 1;
+    }
 #if !defined(__WINDOWS__)
-            /* Initialize signal handlers */
-            struct sigaction sa;
-            sa.sa_handler = signalHandler;
-            sigemptyset(&sa.sa_mask);
-            sa.sa_flags = 0;
-            if (sigaction(SIGHUP, &sa, NULL))
-                SLog(EError, "Could not install a custom signal handler!");
-            if (sigaction(SIGFPE, &sa, NULL))
-                SLog(EError, "Could not install a custom signal handler!");
+    /* Initialize signal handlers */
+    struct sigaction sa;
+    sa.sa_handler = signalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGHUP, &sa, NULL))
+        SLog(EError, "Could not install a custom signal handler!");
+    if (sigaction(SIGFPE, &sa, NULL))
+        SLog(EError, "Could not install a custom signal handler!");
 #endif
 
-        /* Prepare for parsing scene descriptions */
-        SAXParser* parser = new SAXParser();
-        fs::path schemaPath = fileResolver->resolveAbsolute("data/schema/scene.xsd");
-
-        /* Check against the 'scene.xsd' XML Schema */
-        parser->setDoSchema(true);
-        parser->setValidationSchemaFullChecking(true);
-        parser->setValidationScheme(SAXParser::Val_Always);
-        parser->setExternalNoNamespaceSchemaLocation(schemaPath.c_str());
-
-        /* Set the handler */
-        SceneHandler *handler = new SceneHandler(parameters);
-        parser->setDoNamespaces(true);
-        parser->setDocumentHandler(handler);
-        parser->setErrorHandler(handler);
-
-        renderQueue = new RenderQueue();
-
-        ref<FlushThread> flushThread;
-        if (flushTimer > 0) {
-            flushThread = new FlushThread(flushTimer);
-            flushThread->start();
-        }
-
-        int jobIdx = 0;
-        for (int i=optind; i<argc; ++i) {
-            fs::path
-                filename = fileResolver->resolve(argv[i]),
-                filePath = fs::absolute(filename).parent_path(),
-                baseName = filename.stem();
-            ref<FileResolver> frClone = fileResolver->clone();
-            frClone->prependPath(filePath);
-            Thread::getThread()->setFileResolver(frClone);
-
-            SLog(EInfo, "Parsing scene description from \"%s\" ..", argv[i]);
-
-            parser->parse(filename.c_str());
-            ref<Scene> scene = handler->getScene();
-
-            scene->setSourceFile(filename);
-            scene->setDestinationFile(destFile.length() > 0 ?
-                fs::path(destFile) : (filePath / baseName));
-            scene->setBlockSize(blockSize);
-
-            if (scene->destinationExists() && skipExisting)
-                continue;
-
-            ref<RenderJob> thr = new RenderJob(formatString("ren%i", jobIdx++),
-                scene, renderQueue, -1, -1, -1, true, flushTimer > 0);
-            thr->start();
-
-            renderQueue->waitLeft(numParallelScenes-1);
-            if (i+1 < argc && numParallelScenes == 1)
-                Statistics::getInstance()->resetAll();
-        }
-
-        /* Wait for all render processes to finish */
-        renderQueue->waitLeft(0);
-        if (flushThread)
-            flushThread->quit();
-        renderQueue = NULL;
-
-        delete handler;
-        delete parser;
-
-        Statistics::getInstance()->printStats();
-    } catch (const std::exception &e) {
-        std::cerr << "Caught a critical exception: " << e.what() << endl;
-        return -1;
-    } catch (...) {
-        std::cerr << "Caught a critical exception of unknown type!" << endl;
-        return -1;
+    auto material_table = read_material_table(MATERIAL_TABLE_PATH);
+    std::string baseDir = OUTPUT_DIR;
+    if (!boost::filesystem::exists(baseDir))
+    {
+        boost::filesystem::create_directories(baseDir);
     }
 
+    auto pmgr = PluginManager::getInstance();
+
+    auto samplerProps = Properties("independent");
+    samplerProps.setInteger("sampleCount", 128);
+    ref<Sampler> sampler(static_cast<Sampler *>(pmgr->createObject(samplerProps)));
+    sampler->configure();
+
+    auto t = time(nullptr);
+    SLog(EInfo, "random seed: %i", t);
+    ref<Random> rd = new Random(t);
+
+    float sigmaT_range[] = {0.f, 1.f, 2.f, 5.f};
+
+    for (int i = 0; i < count; i++)
+    {
+        SLog(EInfo, "round %i start", i);
+        float sigmaT = sigmaT_range[rd->nextUInt(sizeof(sigmaT_range) / sizeof(float))];
+        float albedo[] = {1 - pow2(rd->nextFloat()),
+                          1 - pow2(rd->nextFloat()),
+                          1 - pow2(rd->nextFloat())};
+        float g = 0;
+        float alpha_0 = pow(10, warpUniform(-3.f, -0.5f, rd->nextFloat()));
+        float alpha_1 = pow(10, warpUniform(-3.f, 0.f, rd->nextFloat()));
+        float theta_0 = 0;
+        float phi_0 = 0;
+        float theta_1 = 0;
+        float phi_1 = 0;
+
+        float eta_0 = warpUniform(1.05f, 2.f, rd->nextFloat());
+        std::string material_1 = material_table[rd->nextUInt(material_table.size())];
+
+        SLog(EInfo, "[Material Preset] Selected %s", material_1.c_str());
+
+        std::stringstream ss("");
+        ss << alpha_0 << "_" << theta_0 << "_" << phi_0 << "_" << eta_0
+           << "_" << sigmaT << "_" << albedo[0] << "_" << albedo[1] << "_"
+           << albedo[2] << "_" << g << "_" << alpha_1 << "_" << theta_1 << "_" << phi_1 << "_" << material_1;
+
+        std::string filename = ss.str();
+        SLog(EInfo, "filename:%s", filename.c_str());
+
+        auto layeredProps = Properties("multilayered");
+        layeredProps.setBoolean("bidir", true);
+        layeredProps.setString("pdf", "bidirStochTRT");
+        layeredProps.setInteger("stochPdfDepth", 4);
+        layeredProps.setInteger("pdfRepetitive", 1);
+        layeredProps.setFloat("diffusePdf", 0.1f);
+        layeredProps.setFloat("maxSurvivalProb", 1.0f);
+        layeredProps.setInteger("nbLayers", 2);
+        layeredProps.setVector("normal_0", Vector3(0.f, 0.f, 1.f));
+        layeredProps.setSpectrum("sigmaT_0", Spectrum(sigmaT));
+        layeredProps.setSpectrum("albedo_0", Spectrum(albedo));
+        layeredProps.setVector("normal_1", Vector3(0.f, 0.f, 1.f));
+
+        auto phaseProps0 = Properties("hg");
+        phaseProps0.setFloat("g", g);
+        ref<ConfigurableObject> phase0(pmgr->createObject(phaseProps0));
+
+        auto surfaceProps0 = Properties("roughdielectric");
+        surfaceProps0.setString("distribution", "ggx");
+        surfaceProps0.setFloat("intIOR", eta_0);
+        surfaceProps0.setFloat("extIOR", 1.0);
+        surfaceProps0.setFloat("alpha", alpha_0);
+        ref<ConfigurableObject> surface0(pmgr->createObject(surfaceProps0));
+
+        auto surfaceProps1 = Properties("roughconductor");
+        surfaceProps1.setString("distribution", "ggx");
+        surfaceProps1.setString("material", material_1);
+        surfaceProps1.setFloat("extEta", eta_0);
+        surfaceProps1.setFloat("alpha", alpha_1);
+        ref<ConfigurableObject> surface1(pmgr->createObject(surfaceProps1));
+
+        ref<BSDF> layered = static_cast<BSDF *>(pmgr->createObject(layeredProps));
+        layered->addChild("surface_0", surface0);
+        layered->addChild("phase_0", phase0);
+        layered->addChild("surface_1", surface1);
+
+        surface0->setParent(layered);
+        phase0->setParent(layered);
+        surface1->setParent(layered);
+
+        layered->configure();
+
+        std::vector<float> dataset;
+        dataset.reserve(SAMPLES * 7);
+        time_t start = time(nullptr);
+        for (int i1 = 0; i1 < SAMPLE_RATE; i1++)
+        {
+            for (int i2 = 0; i2 < SAMPLE_RATE; i2++)
+            {
+                for (int i3 = 0; i3 < SAMPLE_RATE; i3++)
+                {
+                    for (int i4 = 0; i4 < SAMPLE_RATE; i4++)
+                    {
+                        float theta_h = (i1 + rd->nextFloat()) * 2 * M_PI / SAMPLE_RATE;
+                        float phi_h = (i2 + rd->nextFloat()) * M_PI_2 / SAMPLE_RATE;
+                        float theta_d = (i3 + rd->nextFloat()) * 2 * M_PI / SAMPLE_RATE;
+                        float phi_d = (i4 + rd->nextFloat()) * M_PI_2 / SAMPLE_RATE;
+                        Omega_io wiwo = whwd_to_wiwo({theta_h, phi_h, theta_d, phi_d});
+                        float theta_i = wiwo.theta1;
+                        float phi_i = wiwo.phi1;
+                        float theta_o = wiwo.theta2;
+                        float phi_o = wiwo.phi2;
+                        float x1, y1, z1, x2, y2, z2;
+                        x1 = cos(theta_i) * sin(phi_i);
+                        y1 = sin(theta_i) * sin(phi_i);
+                        z1 = cos(phi_i);
+                        x2 = cos(theta_o) * sin(phi_o);
+                        y2 = sin(theta_o) * sin(phi_o);
+                        z2 = cos(phi_o);
+                        Vector3 wi, wo;
+
+                        wi = Vector3(x1, y1, z1);
+                        wo = Vector3(x2, y2, z2);
+                        Intersection its;
+                        its.wi = wi;
+                        BSDFSamplingRecord bRec(its, sampler.get(), ETransportMode::ERadiance);
+                        bRec.wi = wi;
+                        bRec.wo = wo;
+                        Spectrum accum = Spectrum(0.f);
+                        int nan_count = 0;
+                        for (int k = 0; k < SAMPLE_PER_QUERY; k++)
+                        {
+                            auto tmp = layered->eval(bRec, EMeasure::ESolidAngle);
+                            if (std::isnan(tmp[0]) || std::isinf(tmp[0]) || std::isnan(tmp[1]) || std::isinf(tmp[1]) || std::isnan(tmp[2]) || std::isinf(tmp[2]))
+                            {
+                                nan_count++;
+                            }
+                            else
+                            {
+                                accum += tmp;
+                            }
+                        }
+                        accum /= abs(wo[2]);
+                        accum /= (SAMPLE_PER_QUERY - nan_count);
+                        if (nan_count != 0)
+                        {
+                            SLog(EWarn, "Sampling theta_i: %.2f phi_i: %.2f theta_o: %.2f phi_o: %.2f | NaN occur %i times", theta_i, phi_i, theta_o, phi_o, nan_count);
+                        }
+                        dataset.push_back(theta_i);
+                        dataset.push_back(phi_i);
+                        dataset.push_back(theta_o);
+                        dataset.push_back(phi_o);
+                        dataset.push_back(accum[0]);
+                        dataset.push_back(accum[1]);
+                        dataset.push_back(accum[2]);
+                        // SLog(EInfo, "%f %f %f %f %f %f %f", theta_i, phi_i, theta_o, phi_o, accum[0], accum[1], accum[2]);
+                    }
+                }
+            }
+        }
+        std::string fullname = baseDir + "/" + filename + ".npy";
+        // SLog(EInfo, "%s", fullname.c_str());
+        cnpy::npy_save(fullname, &dataset[0], {SAMPLES, 7}, "w");
+        time_t end = time(nullptr);
+        SLog(EInfo, "round %i cost time %fs", i, difftime(end, start));
+    }
     return 0;
 }
 
-int mts_main(int argc, char **argv) {
+int mts_main(int argc, char **argv)
+{
     /* Initialize the core framework */
     Class::staticInitialization();
     Object::staticInitialization();
@@ -435,7 +347,7 @@ int mts_main(int argc, char **argv) {
 #if defined(__WINDOWS__)
     /* Initialize WINSOCK2 */
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2,2), &wsaData))
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData))
         SLog(EError, "Could not initialize WinSock2!");
     if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
         SLog(EError, "Could not find the required version of winsock.dll!");
@@ -471,7 +383,8 @@ int mts_main(int argc, char **argv) {
 }
 
 #if !defined(__WINDOWS__)
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     return mts_main(argc, argv);
 }
 #endif

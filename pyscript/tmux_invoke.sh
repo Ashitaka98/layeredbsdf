@@ -1,5 +1,5 @@
 #! /bin/bash
 source ~/.bashrc
-conda activate layeredBsdf
-source /home/lzr/Projects/layeredbsdf/setpath.sh
-python /home/lzr/Projects/layeredbsdf/pyscript/dataset.py
+conda activate mitsubaPy27
+source /home/lzr/Projects/layeredbsdf_mini/setpath.sh
+mitsuba 300

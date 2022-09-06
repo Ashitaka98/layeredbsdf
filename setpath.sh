@@ -56,3 +56,5 @@ else
 	export LD_LIBRARY_PATH="$MITSUBA_DIR/dist:$LD_LIBRARY_PATH"
 	export PATH="$MITSUBA_DIR/dist:$PATH"
 fi
+
+export LD_LIBRARY_PATH=/home/lzr/Projects/cnpy/install/lib:$LD_LIBRARY_PATH
