@@ -11,3 +11,5 @@ data/ior_rgb/*
 data/ior_rgb_normalized/*
 config.log
 mitsuba.*.log
+experiment/time_sigmaT/image
+experiment/time_sigmaT/spp64_box
